@@ -14,6 +14,12 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 coords_file = "coordinates.json"
 
+DIMENSION_EMOJIS = {
+    "overworld": "🌳",
+    "nether": "👹",
+    "end": "😈"
+}
+
 def load_coords():
     try:
         with open(coords_file, "r") as file:
@@ -68,41 +74,37 @@ async def coords_cmd(interaction: discord.Interaction, location: str, dimension:
     coords_data = load_coords()
     dim = dimension.value
     
-    # Actualitzem coordenades
     coords_data["dimensions"][dim][location] = {"x": x, "y": y, "z": z}
     save_coords(coords_data)
     
-    # Creem l'embed amb els nous canvis
     embed = Embed(
         title="🌍 COORDENADES GLOBALS",
-        color=0x7289DA,  # Blau de Discord
-        description="**Últimes actualitzacions:**"
+        color=0xBF40BF, # 🟣 Color lila vibrant
+        description="**Coordenades per dimensió:**"
     )
     
-    # Configuració per a cada dimensió
     for dim_name in ["overworld", "nether", "end"]:
+        emoji = DIMENSION_EMOJIS[dim_name]
         entries = coords_data["dimensions"][dim_name]
-        content = []
         
         if entries:
+            content = [f"{emoji} **{dim_name.capitalize()}**"]
+            coord_lines = []
             for loc, coord in entries.items():
-                # Nom de la ubicació en negreta
-                content.append(
-                    f"**{loc}:**  `X: {coord['x']} | Y: {coord['y']} | Z: {coord['z']}`"
-                )
-            value = "\n".join(content)
+                coord_lines.append(f"{loc}: X={coord['x']} Y={coord['y']} Z={coord['z']}")
+            # Afegim bloc de codi
+            content.append(f"```\n" + "\n".join(coord_lines) + "\n```")
         else:
-            value = "🚫 Cap coordenada registrada"
+            content = [f"{emoji} **{dim_name.capitalize()}**", "```\n🚫Cap coordenada\n```"]
             
         embed.add_field(
-            name=f"🔹 {dim_name.capitalize()}",
-            value=value,
+            name="\u200b",
+            value="\n".join(content),
             inline=False
         )
     
-    # Peu de pàgina amb icona
-    embed.set_footer(text="⚙️ Actualitzat automàticament")
-    
+    embed.set_footer(text=f"🔄 Última actualització: {interaction.user.name}")
+
     channel = interaction.channel
     channel_id = str(channel.id)
     
@@ -120,7 +122,7 @@ async def coords_cmd(interaction: discord.Interaction, location: str, dimension:
             coords_data["messages"][channel_id] = message.id
             save_coords(coords_data)
         except discord.Forbidden:
-            await interaction.followup.send("❌ No tinc permisos per enviar missatges aquí!")
+            await interaction.followup.send("❌ Error de permisos!")
             return
     
     await interaction.delete_original_response()
