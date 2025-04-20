@@ -1,5 +1,5 @@
 import discord
-from discord import app_commands
+from discord import app_commands, Embed
 from discord.ext import commands
 import json
 import os
@@ -70,27 +70,38 @@ async def coords_cmd(interaction: discord.Interaction, location: str, dimension:
     
     # Actualitzem coordenades
     coords_data["dimensions"][dim][location] = {"x": x, "y": y, "z": z}
+    save_coords(coords_data)
     
-    # Generem el contingut formatat
-    content = "```\n"
-    content += "📍 COORDENADES GLOBALS\n"
-    content += "════════════════════════\n\n"
+    # Creem l'embed amb els nous canvis
+    embed = Embed(
+        title="🌍 COORDENADES GLOBALS",
+        color=0x7289DA,  # Blau de Discord
+        description="**Últimes actualitzacions:**"
+    )
     
+    # Configuració per a cada dimensió
     for dim_name in ["overworld", "nether", "end"]:
         entries = coords_data["dimensions"][dim_name]
-        content += f"【{dim_name.upper()}】\n"
-        content += "─" * (len(dim_name) + 6) + "\n"
+        content = []
         
         if entries:
             for loc, coord in entries.items():
-                content += f"• {loc.ljust(15)} X: {str(coord['x']).rjust(5)} "
-                content += f"Y: {str(coord['y']).rjust(3)} Z: {str(coord['z']).rjust(5)}\n"
+                # Nom de la ubicació en negreta
+                content.append(
+                    f"**{loc}:**  `X: {coord['x']} | Y: {coord['y']} | Z: {coord['z']}`"
+                )
+            value = "\n".join(content)
         else:
-            content += "   (sense dades)\n"
-        
-        content += "\n"
+            value = "🚫 Cap coordenada registrada"
+            
+        embed.add_field(
+            name=f"🔹 {dim_name.capitalize()}",
+            value=value,
+            inline=False
+        )
     
-    content += "```"  # Tancament del code block
+    # Peu de pàgina amb icona
+    embed.set_footer(text="⚙️ Actualitzat automàticament")
     
     channel = interaction.channel
     channel_id = str(channel.id)
@@ -99,19 +110,19 @@ async def coords_cmd(interaction: discord.Interaction, location: str, dimension:
         if channel_id in coords_data["messages"]:
             message_id = int(coords_data["messages"][channel_id])
             message = await channel.fetch_message(message_id)
-            await message.edit(content=content)
+            await message.edit(embed=embed)
         else:
             raise ValueError
             
     except (discord.NotFound, discord.Forbidden, ValueError):
         try:
-            message = await channel.send(content)
+            message = await channel.send(embed=embed)
             coords_data["messages"][channel_id] = message.id
+            save_coords(coords_data)
         except discord.Forbidden:
-            await interaction.followup.send("❌ Error de permisos!")
+            await interaction.followup.send("❌ No tinc permisos per enviar missatges aquí!")
             return
-            
-    save_coords(coords_data)
+    
     await interaction.delete_original_response()
 
 bot.run(TOKEN)
