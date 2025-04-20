@@ -20,6 +20,21 @@ DIMENSION_EMOJIS = {
     "end": "😈"
 }
 
+def format_location_name(location: str) -> str:
+    preposicions = {"de", "del", "d'", "la", "les", "i", "al", "en", "per"}
+    paraules = location.lower().split()
+    if not paraules:
+        return ""
+    
+    paraules_formatejades = [paraules[0].capitalize()]
+    for paraula in paraules[1:]:
+        if paraula in preposicions:
+            paraules_formatejades.append(paraula)
+        else:
+            paraules_formatejades.append(paraula.capitalize())
+    
+    return " ".join(paraules_formatejades)
+
 def load_coords():
     try:
         with open(coords_file, "r") as file:
@@ -74,12 +89,15 @@ async def coords_cmd(interaction: discord.Interaction, location: str, dimension:
     coords_data = load_coords()
     dim = dimension.value
     
-    coords_data["dimensions"][dim][location] = {"x": x, "y": y, "z": z}
+    # Formatem el nom de la ubicació
+    location_formatejada = format_location_name(location)
+    
+    coords_data["dimensions"][dim][location_formatejada] = {"x": x, "y": y, "z": z}
     save_coords(coords_data)
     
     embed = Embed(
         title="🌍 COORDENADES GLOBALS",
-        color=0xBF40BF, # 🟣 Color lila vibrant
+        color=0xBF40BF,
         description="**Coordenades per dimensió:**"
     )
     
@@ -92,10 +110,9 @@ async def coords_cmd(interaction: discord.Interaction, location: str, dimension:
             coord_lines = []
             for loc, coord in entries.items():
                 coord_lines.append(f"{loc}: X={coord['x']} Y={coord['y']} Z={coord['z']}")
-            # Afegim bloc de codi
             content.append(f"```\n" + "\n".join(coord_lines) + "\n```")
         else:
-            content = [f"{emoji} **{dim_name.capitalize()}**", "```\n🚫Cap coordenada\n```"]
+            content = [f"{emoji} **{dim_name.capitalize()}**", "```\n🚫 Cap coordenada\n```"]
             
         embed.add_field(
             name="\u200b",
