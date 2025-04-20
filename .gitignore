@@ -1,5 +1,4 @@
 # Ignorem fitxers sensibles
-token.txt
 .env
 coordinates.json
 
