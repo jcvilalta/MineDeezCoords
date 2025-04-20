@@ -1,0 +1,19 @@
+# Ignorem fitxers sensibles
+.env
+coordinates.json
+
+# Ignorem entorns virtuals
+venv/
+.env/
+*.venv
+
+# Ignora arxius de Python
+__pycache__/
+*.py[cod]
+*.log
+*.pot
+*.pyc
+
+# Ignora configuracions d'IDE
+.idea/
+.vscode/
