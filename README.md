@@ -43,3 +43,53 @@ pip install -r requirements.txt
 
 # Configura el token
 echo "DISCORD_TOKEN=el-teu-token-aqui" > .env
+```
+
+## 🕹️ Ús Bàsic
+### 💾 Guardar coordenades
+```bash
+/coords location:"Cova Diamants" dimension:Overworld x:100 y:64 z:-200
+```
+
+### 🔍 Cercar coordenades
+```bash
+# Per dimensió
+/getcoords dimension:Nether
+
+# Per ubicació específica
+/getcoords location:"Cova Diamants"
+
+# Totes les coordenades
+/getcoords
+```
+
+### 📚 Estructura de Dades
+El bot utilitza un fitxer coordinates.json amb aquest format:
+
+```json
+{
+  "messages": {
+    "canal_id": missatge_id
+  },
+  "dimensions": {
+    "overworld": {
+      "Cova Diamants": {"x": 100, "y": 64, "z": -200}
+    },
+    "nether": {},
+    "end": {}
+  }
+}
+```
+
+## 🛠️ Desenvolupament
+### Contribuir
+
+Fes un fork del repositori
+
+Crea una branca nova (git checkout -b nova-funcio)
+
+Fes commit dels canvis (git commit -am 'Afegida nova funció')
+
+Fes push a la branca (git push origin nova-funcio)
+
+Obre una Pull Request
