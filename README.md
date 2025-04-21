@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/python-3.10+-yellow.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-![Banner Example]() <!-- Podeu afegir una imatge real aquí -->
+![Banner Example](/banner1.png) <!-- Podeu afegir una imatge real aquí -->
 
 ## ✨ Característiques Principals
 - **💾 Emmagatzematge persistent** en fitxer JSON
