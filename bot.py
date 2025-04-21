@@ -6,15 +6,19 @@ import json
 import os
 from dotenv import load_dotenv
 
+# Load environment variables from .env file
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
+# Configure bot with basic intents
 intents = discord.Intents.default()
-intents.message_content = True
+intents.message_content = True  # Required for message content
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# File to store coordinates data
 coords_file = "coordinates.json"
 
+# Emoji mapping for different dimensions
 DIMENSION_EMOJIS = {
     "overworld": "🌳",
     "nether": "👹",
@@ -22,6 +26,7 @@ DIMENSION_EMOJIS = {
 }
 
 def format_location_name(location: str) -> str:
+    """Formats location names following Catalan capitalization rules."""
     prepositions = {"de", "del", "d'", "la", "les", "i", "al", "en", "per"}
     words = location.lower().split()
     
@@ -35,6 +40,7 @@ def format_location_name(location: str) -> str:
     return " ".join(formatted_words)
 
 def load_coords() -> dict:
+    """Load coordinates data from JSON file."""
     try:
         with open(coords_file, "r") as file:
             data = json.load(file)
@@ -57,11 +63,13 @@ def load_coords() -> dict:
         }
 
 def save_coords(data: dict) -> None:
+    """Save coordinates data to JSON file."""
     with open(coords_file, "w") as file:
         json.dump(data, file, indent=4)
 
 @bot.event
 async def on_ready():
+    """Bot startup handler."""
     print(f"✅ Connectat com a {bot.user}")
     try:
         synced = await bot.tree.sync()
@@ -69,6 +77,7 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Error syncing commands: {e}")
 
+# Command to save coordinates (user-facing text remains in Catalan)
 @bot.tree.command(name="coords", description="Save coordinates for a dimension")
 @app_commands.describe(
     location="Nom de la ubicació",
@@ -83,6 +92,7 @@ async def on_ready():
     app_commands.Choice(name="End", value="end")
 ])
 async def coords_cmd(interaction: discord.Interaction, location: str, dimension: app_commands.Choice[str], x: int, y: int, z: int):
+    """Handles coordinate saving functionality."""
     await interaction.response.defer()
     
     coords_data = load_coords()
@@ -92,12 +102,14 @@ async def coords_cmd(interaction: discord.Interaction, location: str, dimension:
     coords_data["dimensions"][dim][formatted_location] = {"x": x, "y": y, "z": z}
     save_coords(coords_data)
     
+    # Create embed with updated coordinates
     embed = Embed(
         title="🌍 COORDENADES GLOBALS",
         color=0xBF40BF,
         description="**Coordenades guardades per dimensió:**"
     )
     
+    # Populate embed fields for each dimension
     for dim_name in ["overworld", "nether", "end"]:
         emoji = DIMENSION_EMOJIS[dim_name]
         entries = coords_data["dimensions"][dim_name]
@@ -112,6 +124,8 @@ async def coords_cmd(interaction: discord.Interaction, location: str, dimension:
         embed.add_field(name="\u200b", value="\n".join(content), inline=False)
     
     embed.set_footer(text=f"🔄 Actualitzat per: {interaction.user.name}")
+    
+    # Update or create persistent message
     channel = interaction.channel
     channel_id = str(channel.id)
     
@@ -133,7 +147,9 @@ async def coords_cmd(interaction: discord.Interaction, location: str, dimension:
     
     await interaction.delete_original_response()
 
+# Autocomplete handler for location names
 async def location_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice]:
+    """Provides autocomplete suggestions for location names."""
     coords_data = load_coords()
     all_locations = []
     for dim in coords_data["dimensions"].values():
@@ -141,6 +157,7 @@ async def location_autocomplete(interaction: discord.Interaction, current: str) 
     filtered = [loc for loc in all_locations if current.lower() in loc.lower()]
     return [app_commands.Choice(name=loc, value=loc) for loc in filtered[:25]]
 
+# Command to retrieve coordinates (user-facing text remains in Catalan)
 @bot.tree.command(name="getcoords", description="Mostra coordenades amb filtres")
 @app_commands.describe(
     dimension="Filtra per dimensió",
@@ -197,23 +214,26 @@ async def getcoords_cmd(interaction: discord.Interaction,
             embed.description = f"🔍 **COORDENADES DE '{formatted_location}':**\n```🚫 No trobada```"
 
     else:
-        global_content = []
+        embed.title = "🌍 COORDENADES GLOBALS"
         for dim_name in ["overworld", "nether", "end"]:
             entries = coords_data["dimensions"][dim_name]
+            emoji = DIMENSION_EMOJIS[dim_name]
+            
             if entries:
-                dim_entries = "\n".join([f"{loc}: X={c['x']} Y={c['y']} Z={c['z']}" for loc, c in entries.items()])
-                global_content.append(
-                    f"{DIMENSION_EMOJIS[dim_name]} **{dim_name.upper()}**\n{dim_entries}"
+                content = "\n".join([f"{loc}: X={c['x']} Y={c['y']} Z={c['z']}" for loc, c in entries.items()])
+                embed.add_field(
+                    name=f"{emoji} **{dim_name.upper()}**",
+                    value=f"```\n{content}\n```",
+                    inline=False
                 )
-        
-        if global_content:
-            embed.description = (
-                "🌍 **COORDENADES GLOBALS:**\n"
-                f"```\n" + "\n\n".join(global_content) + "\n```"
-            )
-        else:
-            embed.description = "🌍 **COORDENADES GLOBALS:**\n```🚫 Cap coordenada```"
+            else:
+                embed.add_field(
+                    name=f"{emoji} **{dim_name.upper()}**",
+                    value="```🚫 Cap coordenada```",
+                    inline=False
+                )
     
     await interaction.followup.send(embed=embed)
 
+# Start the bot
 bot.run(TOKEN)
