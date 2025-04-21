@@ -71,11 +71,11 @@ async def on_ready():
 
 @bot.tree.command(name="coords", description="Save coordinates for a dimension")
 @app_commands.describe(
-    location="Name of the location",
-    dimension="Dimension",
-    x="X coordinate",
-    y="Y coordinate",
-    z="Z coordinate"
+    location="Nom de la ubicació",
+    dimension="Dimensió",
+    x="Coordenada X",
+    y="Coordenada Y",
+    z="Coordenada Z"
 )
 @app_commands.choices(dimension=[
     app_commands.Choice(name="Overworld", value="overworld"),
@@ -93,9 +93,9 @@ async def coords_cmd(interaction: discord.Interaction, location: str, dimension:
     save_coords(coords_data)
     
     embed = Embed(
-        title="🌍 GLOBAL COORDINATES",
+        title="🌍 COORDENADES GLOBALS",
         color=0xBF40BF,
-        description="**Saved coordinates per dimension:**"
+        description="**Coordenades guardades per dimensió:**"
     )
     
     for dim_name in ["overworld", "nether", "end"]:
@@ -107,11 +107,11 @@ async def coords_cmd(interaction: discord.Interaction, location: str, dimension:
             coord_lines = [f"{loc}: X={c['x']} Y={c['y']} Z={c['z']}" for loc, c in entries.items()]
             content.append(f"```\n" + "\n".join(coord_lines) + "\n```")
         else:
-            content = [f"{emoji} **{dim_name.capitalize()}**", "```\n🚫 No coordinates\n```"]
+            content = [f"{emoji} **{dim_name.capitalize()}**", "```\n🚫 Sense coordenades\n```"]
             
         embed.add_field(name="\u200b", value="\n".join(content), inline=False)
     
-    embed.set_footer(text=f"🔄 Last updated by: {interaction.user.name}")
+    embed.set_footer(text=f"🔄 Actualitzat per: {interaction.user.name}")
     channel = interaction.channel
     channel_id = str(channel.id)
     
@@ -128,12 +128,11 @@ async def coords_cmd(interaction: discord.Interaction, location: str, dimension:
             coords_data["messages"][channel_id] = message.id
             save_coords(coords_data)
         except discord.Forbidden:
-            await interaction.followup.send("❌ Missing permissions!")
+            await interaction.followup.send("❌ Permisos insuficients!")
             return
     
     await interaction.delete_original_response()
 
-# Funció d'autocompletat definida ABANS de la comanda
 async def location_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice]:
     coords_data = load_coords()
     all_locations = []
@@ -142,7 +141,7 @@ async def location_autocomplete(interaction: discord.Interaction, current: str) 
     filtered = [loc for loc in all_locations if current.lower() in loc.lower()]
     return [app_commands.Choice(name=loc, value=loc) for loc in filtered[:25]]
 
-@bot.tree.command(name="getcoords", description="Mostra coordenades amb filtres opcionals")
+@bot.tree.command(name="getcoords", description="Mostra coordenades amb filtres")
 @app_commands.describe(
     dimension="Filtra per dimensió",
     location="Cerca una ubicació específica"
@@ -152,58 +151,68 @@ async def location_autocomplete(interaction: discord.Interaction, current: str) 
     app_commands.Choice(name="Nether", value="nether"),
     app_commands.Choice(name="End", value="end")
 ])
-@app_commands.autocomplete(location=location_autocomplete)  # Referència directa
+@app_commands.autocomplete(location=location_autocomplete)
 async def getcoords_cmd(interaction: discord.Interaction, 
-                       dimension: app_commands.Choice[str] = None, 
+                       dimension: str = None, 
                        location: str = None):
     await interaction.response.defer()
     
     coords_data = load_coords()
-    embed = Embed(title="🔍 COORDENADES TROBADES", color=0xBF40BF, description="**Resultats de la cerca:**")
-    
-    if location:
+    embed = Embed(color=0xBF40BF)
+
+    if dimension:
+        dim_emoji = DIMENSION_EMOJIS[dimension]
+        entries = coords_data["dimensions"][dimension]
+        
+        if entries:
+            content = "\n".join([f"{loc}: X={c['x']} Y={c['y']} Z={c['z']}" for loc, c in entries.items()])
+            embed.description = (
+                f"{dim_emoji}**COORDENADES DE L'{dimension.upper()}:**\n"
+                f"```\n{content}\n```"
+            )
+        else:
+            embed.description = f"{dim_emoji}**COORDENADES DE L'{dimension.upper()}:**\n```🚫 Cap coordenada```"
+
+    elif location:
         formatted_location = format_location_name(location)
         found = False
+        content = []
+        
         for dim_name in ["overworld", "nether", "end"]:
             entries = coords_data["dimensions"][dim_name]
             if formatted_location in entries:
                 coord = entries[formatted_location]
-                embed.add_field(
-                    name=f"{DIMENSION_EMOJIS[dim_name]} {dim_name.capitalize()}",
-                    value=f"```\nX={coord['x']} | Y={coord['y']} | Z={coord['z']}\n```",
-                    inline=False
+                content.append(
+                    f"{DIMENSION_EMOJIS[dim_name]} {dim_name.capitalize()}: "
+                    f"X={coord['x']} Y={coord['y']} Z={coord['z']}"
                 )
                 found = True
-        if not found:
-            embed.description = f"🚫 No s'han trobat coordenades per: `{formatted_location}`"
-    elif dimension:
-        dim_name = dimension.value
-        entries = coords_data["dimensions"][dim_name]
-        if entries:
-            content = [f"{loc}: X={c['x']} Y={c['y']} Z={c['z']}" for loc, c in entries.items()]
-            embed.add_field(
-                name=f"{DIMENSION_EMOJIS[dim_name]} {dim_name.capitalize()}",
-                value=f"```\n" + "\n".join(content) + "\n```",
-                inline=False
+                
+        if found:
+            embed.description = (
+                f"🔍 **COORDENADES DE '{formatted_location}':**\n"
+                f"```\n" + "\n".join(content) + "\n```"
             )
         else:
-            embed.description = f"🚫 No hi ha coordenades a {dim_name.capitalize()}"
+            embed.description = f"🔍 **COORDENADES DE '{formatted_location}':**\n```🚫 No trobada```"
+
     else:
+        global_content = []
         for dim_name in ["overworld", "nether", "end"]:
             entries = coords_data["dimensions"][dim_name]
             if entries:
-                content = [f"{loc}: X={c['x']} Y={c['y']} Z={c['z']}" for loc, c in entries.items()]
-                embed.add_field(
-                    name=f"{DIMENSION_EMOJIS[dim_name]} {dim_name.capitalize()}",
-                    value=f"```\n" + "\n".join(content) + "\n```",
-                    inline=False
+                dim_entries = "\n".join([f"{loc}: X={c['x']} Y={c['y']} Z={c['z']}" for loc, c in entries.items()])
+                global_content.append(
+                    f"{DIMENSION_EMOJIS[dim_name]} **{dim_name.upper()}**\n{dim_entries}"
                 )
-            else:
-                embed.add_field(
-                    name=f"{DIMENSION_EMOJIS[dim_name]} {dim_name.capitalize()}",
-                    value="```\n🚫 Cap coordenada\n```",
-                    inline=False
-                )
+        
+        if global_content:
+            embed.description = (
+                "🌍 **COORDENADES GLOBALS:**\n"
+                f"```\n" + "\n\n".join(global_content) + "\n```"
+            )
+        else:
+            embed.description = "🌍 **COORDENADES GLOBALS:**\n```🚫 Cap coordenada```"
     
     await interaction.followup.send(embed=embed)
 
