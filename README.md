@@ -1,30 +1,45 @@
-# MineDeezCoords Bot
-Discord bot to save the coordinates of your Minecraft world in a quick and easy way.
+# 🎮 MineDeezCoords Bot
 
-## Key Features:
+**Discord bot per gestionar coordenades de Minecraft amb suport català**  
+*Mantingueu el registre de les vostres ubicacions de Minecraft directament a Discord!*
 
-Uses slash commands for better UX
+[![Discord.py](https://img.shields.io/badge/discord.py-2.3.2+-blue.svg)](https://discordpy.readthedocs.io/)
+[![Python](https://img.shields.io/badge/python-3.10+-yellow.svg)](https://python.org)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Stores data in JSON file
+![Banner Example](https://via.placeholder.com/800x200.png?text=MineDeezCoords+Bot+Showcase) <!-- Podeu afegir una imatge real aquí -->
 
-Has autocomplete for location names
+## ✨ Característiques Principals
+- **💾 Emmagatzematge persistent** en fitxer JSON
+- **🎮 Suport per 3 dimensions**:
+  - 🌳 Overworld 
+  - 👹 Nether
+  - 😈 End
+- **🔍 Cerca intel·ligent** amb autocompletat
+- **📱 Interfície en català** amb formatatge correcte
+- **🔄 Missatge global autoactualitzable**
+- **⚙️ Gestió d'errors** i permisos
 
-Shows formatted coordinates with dimension-specific emojis
+## 🚀 Començem
 
-Maintains a persistent message with all coordinates
+### 📋 Prerequisits
+- Python 3.10+
+- [Discord Bot Token](https://discord.com/developers/applications)
+- Permisos del bot:
+  - `applications.commands`
+  - `Send Messages`
+  - `Embed Links`
 
-Supports three dimensions: Overworld, Nether, and End
+### ⚙️ Instal·lació
+```bash
+# Clona el repositori
+git clone https://github.com/el-teu-usuari/MineDeezCoords.git
 
-Proper Catalan language formatting for location names
+# Entra a la carpeta
+cd MineDeezCoords
 
-Error handling for permissions and missing data
+# Instal·la dependències
+pip install -r requirements.txt
 
-## The bot provides:
-
-/coords to save coordinates
-
-/getcoords to view coordinates (with filters)
-
-Automatic message updating for global coordinates
-
-Proper localization formatting for Catalan names
+# Configura el token
+echo "DISCORD_TOKEN=el-teu-token-aqui" > .env
