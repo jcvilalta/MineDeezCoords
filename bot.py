@@ -28,14 +28,26 @@ DIMENSION_EMOJIS = {
 def format_location_name(location: str) -> str:
     """Formats location names following Catalan capitalization rules."""
     prepositions = {"de", "del", "d'", "la", "les", "i", "al", "en", "per"}
-    words = location.lower().split()
+    words = location.split()  # Conservem la capitalització original
     
     if not words:
         return ""
     
-    formatted_words = [words[0].capitalize()]
+    # Processem la primera paraula
+    first_word = words[0]
+    formatted_words = [first_word[0].upper() + first_word[1:]]  # Capitalitzem primera lletra
+    
+    # Processem la resta de paraules
     for word in words[1:]:
-        formatted_words.append(word if word in prepositions else word.capitalize())
+        lower_word = word.lower()
+        if lower_word in prepositions:
+            formatted_words.append(lower_word)
+        else:
+            # Conservem majúscules internes si existeixen
+            if word == word.lower():
+                formatted_words.append(word.capitalize())
+            else:
+                formatted_words.append(word)
     
     return " ".join(formatted_words)
 
