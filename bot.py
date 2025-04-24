@@ -1,20 +1,21 @@
 # Import required libraries
 import discord
-from discord import app_commands, Embed
+from discord import app_commands, Embed, ButtonStyle
 from discord.ext import commands
+from discord.ui import Button, View
 import json
 import os
 from dotenv import load_dotenv
-from discord.ui import Button, View
-import asyncio
 
 # Load environment variables from .env file
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
+TEST_GUILD_ID = 916239256677142559
+
 # Configure bot with basic intents
 intents = discord.Intents.default()
-intents.message_content = True  # Required for message content
+intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # File to store coordinates data
@@ -27,25 +28,23 @@ DIMENSION_EMOJIS = {
     "end": "😈"
 }
 
+# ---------- HELPERS ----------
 def format_location_name(location: str) -> str:
-    """Formats location names following Catalan capitalization rules."""
+    """Formats location names following Catalan rules while preserving mid-word capitals."""
     prepositions = {"de", "del", "d'", "la", "les", "i", "al", "en", "per"}
-    words = location.split()  # Conservem la capitalització original
+    words = location.split()
     
     if not words:
         return ""
     
-    # Processem la primera paraula
     first_word = words[0]
-    formatted_words = [first_word[0].upper() + first_word[1:]]  # Capitalitzem primera lletra
+    formatted_words = [first_word[0].upper() + first_word[1:]]  # Capitalitza primera lletra
     
-    # Processem la resta de paraules
     for word in words[1:]:
         lower_word = word.lower()
         if lower_word in prepositions:
             formatted_words.append(lower_word)
         else:
-            # Conservem majúscules internes si existeixen
             if word == word.lower():
                 formatted_words.append(word.capitalize())
             else:
@@ -54,9 +53,8 @@ def format_location_name(location: str) -> str:
     return " ".join(formatted_words)
 
 def load_coords() -> dict:
-    """Load coordinates data from JSON file."""
     try:
-        with open(coords_file, "r") as file:
+        with open(coords_file, "r", encoding='utf-8') as file:
             data = json.load(file)
             return {
                 "messages": {str(k): v for k, v in data.get("messages", {}).items()},
@@ -77,53 +75,17 @@ def load_coords() -> dict:
         }
 
 def save_coords(data: dict) -> None:
-    """Save coordinates data to JSON file."""
-    with open(coords_file, "w") as file:
-        json.dump(data, file, indent=4)
+    with open(coords_file, "w", encoding='utf-8') as file:
+        json.dump(data, file, indent=4, ensure_ascii=False)
 
-@bot.event
-async def on_ready():
-    """Bot startup handler."""
-    print(f"✅ Connectat com a {bot.user}")
-    try:
-        synced = await bot.tree.sync()
-        print(f"🔁 Synced {len(synced)} commands")
-    except Exception as e:
-        print(f"❌ Error syncing commands: {e}")
-
-# Command to save coordinates (user-facing text remains in Catalan)
-@bot.tree.command(name="coords", description="Save coordinates for a dimension")
-@app_commands.describe(
-    location="Nom de la ubicació",
-    dimension="Dimensió",
-    x="Coordenada X",
-    y="Coordenada Y",
-    z="Coordenada Z"
-)
-@app_commands.choices(dimension=[
-    app_commands.Choice(name="Overworld", value="overworld"),
-    app_commands.Choice(name="Nether", value="nether"),
-    app_commands.Choice(name="End", value="end")
-])
-async def coords_cmd(interaction: discord.Interaction, location: str, dimension: app_commands.Choice[str], x: int, y: int, z: int):
-    """Handles coordinate saving functionality."""
-    await interaction.response.defer()
-    
-    coords_data = load_coords()
-    dim = dimension.value
-    
-    formatted_location = format_location_name(location)
-    coords_data["dimensions"][dim][formatted_location] = {"x": x, "y": y, "z": z}
-    save_coords(coords_data)
-    
-    # Create embed with updated coordinates
+def create_global_embed(coords_data: dict) -> Embed:
+    """Crea l'embed global amb totes les coordenades"""
     embed = Embed(
         title="🌍 COORDENADES GLOBALS",
         color=0xBF40BF,
         description="**Coordenades guardades per dimensió:**"
     )
     
-    # Populate embed fields for each dimension
     for dim_name in ["overworld", "nether", "end"]:
         emoji = DIMENSION_EMOJIS[dim_name]
         entries = coords_data["dimensions"][dim_name]
@@ -137,9 +99,79 @@ async def coords_cmd(interaction: discord.Interaction, location: str, dimension:
             
         embed.add_field(name="\u200b", value="\n".join(content), inline=False)
     
+    return embed
+
+# ---------- AUTOCOMPLETE ----------
+async def location_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice]:
+    coords_data = load_coords()
+    all_locations = []
+    for dim in coords_data["dimensions"].values():
+        all_locations.extend(dim.keys())
+    filtered = [loc for loc in all_locations if current.lower() in loc.lower()]
+    return [app_commands.Choice(name=loc, value=loc) for loc in filtered[:25]]
+
+# ---------- VIEWS ----------
+class ConfirmDeleteView(View):
+    def __init__(self, target, is_dimension=False):
+        super().__init__(timeout=30)
+        self.target = target
+        self.is_dimension = is_dimension
+        self.confirmed = False
+
+    @discord.ui.button(label="✅ Confirmar", style=ButtonStyle.green)
+    async def confirm(self, interaction: discord.Interaction, button: Button):
+        self.confirmed = True
+        self.stop()
+        await interaction.response.edit_message(content="✅ Eliminant...", view=None)
+
+    @discord.ui.button(label="❌ Cancelar", style=ButtonStyle.red)
+    async def cancel(self, interaction: discord.Interaction, button: Button):
+        self.stop()
+        await interaction.response.edit_message(content="❌ Acció cancel·lada", view=None)
+
+# ---------- COMMANDS ----------
+@bot.event
+async def on_ready():
+    print(f"✅ Connectat com a {bot.user}")
+    try:
+        await bot.tree.sync()
+        print("🔁 Comandes GLOBALS sincronitzades!")
+    except Exception as e:
+        print(f"❌ Error: {str(e)}")
+
+@bot.command()
+@commands.is_owner()
+async def sync(ctx):
+    """Força la sincronització global"""
+    await bot.tree.sync()
+    await ctx.send("✅ Comandes globals sincronitzades!")
+
+@bot.tree.command(name="coords", description="Desa coordenades per una dimensió")
+@app_commands.describe(
+    location="Nom de la ubicació",
+    dimension="Dimensió",
+    x="Coordenada X",
+    y="Coordenada Y",
+    z="Coordenada Z"
+)
+@app_commands.choices(dimension=[
+    app_commands.Choice(name="Overworld", value="overworld"),
+    app_commands.Choice(name="Nether", value="nether"),
+    app_commands.Choice(name="End", value="end")
+])
+async def coords_cmd(interaction: discord.Interaction, location: str, dimension: app_commands.Choice[str], x: int, y: int, z: int):
+    await interaction.response.defer()
+    
+    coords_data = load_coords()
+    dim = dimension.value
+    
+    formatted_location = format_location_name(location)
+    coords_data["dimensions"][dim][formatted_location] = {"x": x, "y": y, "z": z}
+    save_coords(coords_data)
+    
+    embed = create_global_embed(coords_data)
     embed.set_footer(text=f"🔄 Actualitzat per: {interaction.user.name}")
     
-    # Update or create persistent message
     channel = interaction.channel
     channel_id = str(channel.id)
     
@@ -161,17 +193,6 @@ async def coords_cmd(interaction: discord.Interaction, location: str, dimension:
     
     await interaction.delete_original_response()
 
-# Autocomplete handler for location names
-async def location_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice]:
-    """Provides autocomplete suggestions for location names."""
-    coords_data = load_coords()
-    all_locations = []
-    for dim in coords_data["dimensions"].values():
-        all_locations.extend(dim.keys())
-    filtered = [loc for loc in all_locations if current.lower() in loc.lower()]
-    return [app_commands.Choice(name=loc, value=loc) for loc in filtered[:25]]
-
-# Command to retrieve coordinates (user-facing text remains in Catalan)
 @bot.tree.command(name="getcoords", description="Mostra coordenades amb filtres")
 @app_commands.describe(
     dimension="Filtra per dimensió",
@@ -183,9 +204,7 @@ async def location_autocomplete(interaction: discord.Interaction, current: str) 
     app_commands.Choice(name="End", value="end")
 ])
 @app_commands.autocomplete(location=location_autocomplete)
-async def getcoords_cmd(interaction: discord.Interaction, 
-                       dimension: str = None, 
-                       location: str = None):
+async def getcoords_cmd(interaction: discord.Interaction, dimension: str = None, location: str = None):
     await interaction.response.defer()
     
     coords_data = load_coords()
@@ -197,10 +216,7 @@ async def getcoords_cmd(interaction: discord.Interaction,
         
         if entries:
             content = "\n".join([f"{loc}: X={c['x']} Y={c['y']} Z={c['z']}" for loc, c in entries.items()])
-            embed.description = (
-                f"{dim_emoji}**COORDENADES DE L'{dimension.upper()}:**\n"
-                f"```\n{content}\n```"
-            )
+            embed.description = f"{dim_emoji}**COORDENADES DE L'{dimension.upper()}:**\n```\n{content}\n```"
         else:
             embed.description = f"{dim_emoji}**COORDENADES DE L'{dimension.upper()}:**\n```🚫 Cap coordenada```"
 
@@ -213,17 +229,11 @@ async def getcoords_cmd(interaction: discord.Interaction,
             entries = coords_data["dimensions"][dim_name]
             if formatted_location in entries:
                 coord = entries[formatted_location]
-                content.append(
-                    f"{DIMENSION_EMOJIS[dim_name]} {dim_name.capitalize()}: "
-                    f"X={coord['x']} Y={coord['y']} Z={coord['z']}"
-                )
+                content.append(f"{DIMENSION_EMOJIS[dim_name]} {dim_name.capitalize()}: X={coord['x']} Y={coord['y']} Z={coord['z']}")
                 found = True
                 
         if found:
-            embed.description = (
-                f"🔍 **COORDENADES DE '{formatted_location}':**\n"
-                f"```\n" + "\n".join(content) + "\n```"
-            )
+            embed.description = f"🔍 **COORDENADES DE '{formatted_location}':**\n```\n" + "\n".join(content) + "\n```"
         else:
             embed.description = f"🔍 **COORDENADES DE '{formatted_location}':**\n```🚫 No trobada```"
 
@@ -249,5 +259,72 @@ async def getcoords_cmd(interaction: discord.Interaction,
     
     await interaction.followup.send(embed=embed)
 
-# Start the bot
+@bot.tree.command(name="deletecoords", description="Elimina coordenades existents")
+@app_commands.describe(
+    location="Ubicació a eliminar",
+    dimension="Dimensió a buidar"
+)
+@app_commands.choices(dimension=[
+    app_commands.Choice(name="Overworld", value="overworld"),
+    app_commands.Choice(name="Nether", value="nether"),
+    app_commands.Choice(name="End", value="end")
+])
+@app_commands.autocomplete(location=location_autocomplete)
+async def deletecoords_cmd(interaction: discord.Interaction, location: str = None, dimension: str = None):
+    await interaction.response.defer(ephemeral=True)
+    
+    coords_data = load_coords()
+    target = None
+    is_dimension = False
+
+    if location and dimension:
+        await interaction.followup.send("❌ Selecciona només ubicació O dimensió", ephemeral=True)
+        return
+        
+    if location:
+        formatted_location = format_location_name(location)
+        target = formatted_location
+        found = False
+        for dim in ["overworld", "nether", "end"]:
+            if formatted_location in coords_data["dimensions"][dim]:
+                del coords_data["dimensions"][dim][formatted_location]
+                found = True
+        if not found:
+            await interaction.followup.send(f"❌ Ubicació no trobada: {formatted_location}", ephemeral=True)
+            return
+            
+    elif dimension:
+        target = dimension
+        is_dimension = True
+        coords_data["dimensions"][dimension].clear()
+        
+    else:
+        await interaction.followup.send("❌ Selecciona una ubicació o dimensió", ephemeral=True)
+        return
+
+    view = ConfirmDeleteView(target, is_dimension)
+    msg_content = f"⚠️ Confirmes eliminar **{target}**? Aquesta acció és irreversible!"
+    
+    await interaction.followup.send(msg_content, view=view, ephemeral=True)
+    await view.wait()
+    
+    if view.confirmed:
+        save_coords(coords_data)
+        await interaction.edit_original_response(content=f"✅ S'ha eliminat: **{target}**")
+        
+        # Actualitza missatge global
+        channel = interaction.channel
+        channel_id = str(channel.id)
+        if channel_id in coords_data["messages"]:
+            try:
+                message = await channel.fetch_message(coords_data["messages"][channel_id])
+                new_embed = create_global_embed(coords_data)
+                new_embed.set_footer(text=f"🔄 Actualitzat per: {interaction.user.name}")
+                await message.edit(embed=new_embed)
+            except Exception as e:
+                print(f"Error actualitzant missatge: {e}")
+    else:
+        await interaction.edit_original_response(content="❌ Acció cancel·lada")
+
+# ---------- RUN BOT ----------
 bot.run(TOKEN)
