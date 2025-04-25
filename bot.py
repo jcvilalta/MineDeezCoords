@@ -375,5 +375,55 @@ async def deletecoords_cmd(interaction: discord.Interaction, location: str = Non
     else:
         await interaction.edit_original_response(content="❌ Acció cancel·lada")
 
+@bot.tree.command(name="linkcoords", description="Mostra coordenades vinculades entre dimensions")
+@app_commands.describe(location="Ubicació a vincular")
+@app_commands.autocomplete(location=location_autocomplete)
+async def linkcoords_cmd(interaction: discord.Interaction, location: str):
+    await interaction.response.defer()
+    
+    coords_data = load_coords()
+    formatted_location = format_location_name(location)
+    embed = Embed(title=f"🔗 COORDENADES VINCULADES: {formatted_location}", color=0x00FF00)
+    
+    found = False
+    for dim in ["overworld", "nether", "end"]:
+        if formatted_location in coords_data["dimensions"][dim]:
+            coord = coords_data["dimensions"][dim][formatted_location]
+            embed.add_field(
+                name=f"{DIMENSION_EMOJIS[dim]} {dim.capitalize()}",
+                value=f"```X={coord['x']} | Y={coord['y']} | Z={coord['z']}```",
+                inline=False
+            )
+            found = True
+            
+            # Calcula coordenades vinculades Overworld <-> Nether
+            if dim == "overworld":
+                nether_coords = {
+                    "x": coord["x"] // 8,
+                    "y": coord["y"],
+                    "z": coord["z"] // 8
+                }
+                embed.add_field(
+                    name="⚡ Calcul Nether",
+                    value=f"```X={nether_coords['x']} | Y={nether_coords['y']} | Z={nether_coords['z']}```",
+                    inline=False
+                )
+            elif dim == "nether":
+                overworld_coords = {
+                    "x": coord["x"] * 8,
+                    "y": coord["y"],
+                    "z": coord["z"] * 8
+                }
+                embed.add_field(
+                    name="⚡ Calcul Overworld",
+                    value=f"```X={overworld_coords['x']} | Y={overworld_coords['y']} | Z={overworld_coords['z']}```",
+                    inline=False
+                )
+    
+    if not found:
+        embed.description = f"🚫 Ubicació no trobada: `{formatted_location}`"
+    
+    await interaction.followup.send(embed=embed)
+
 # ---------- RUN BOT ----------
 bot.run(TOKEN)
