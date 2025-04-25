@@ -259,6 +259,55 @@ async def getcoords_cmd(interaction: discord.Interaction, dimension: str = None,
     
     await interaction.followup.send(embed=embed)
 
+@bot.tree.command(name="editcoords", description="Edita coordenades existents")
+@app_commands.describe(
+    location="Ubicació a editar",
+    dimension="Dimensió",
+    x="Nova coordenada X",
+    y="Nova coordenada Y",
+    z="Nova coordenada Z"
+)
+@app_commands.choices(dimension=[
+    app_commands.Choice(name="Overworld", value="overworld"),
+    app_commands.Choice(name="Nether", value="nether"),
+    app_commands.Choice(name="End", value="end")
+])
+@app_commands.autocomplete(location=location_autocomplete)
+async def editcoords_cmd(interaction: discord.Interaction, 
+                        location: str, 
+                        dimension: str, 
+                        x: int, 
+                        y: int, 
+                        z: int):
+    await interaction.response.defer()
+    
+    coords_data = load_coords()
+    dim = dimension
+    formatted_location = format_location_name(location)
+    
+    # Verificar si l'ubicació existeix a la dimensió
+    if formatted_location not in coords_data["dimensions"][dim]:
+        await interaction.followup.send(f"❌ `{formatted_location}` no existeix a {dim.capitalize()}!", ephemeral=True)
+        return
+    
+    # Actualitzar coordenades
+    coords_data["dimensions"][dim][formatted_location] = {"x": x, "y": y, "z": z}
+    save_coords(coords_data)
+    
+    # Actualitzar missatge global
+    channel = interaction.channel
+    channel_id = str(channel.id)
+    try:
+        if channel_id in coords_data["messages"]:
+            message = await channel.fetch_message(coords_data["messages"][channel_id])
+            new_embed = create_global_embed(coords_data)
+            new_embed.set_footer(text=f"🔄 Actualitzat per: {interaction.user.name}")
+            await message.edit(embed=new_embed)
+    except Exception as e:
+        print(f"Error actualitzant missatge: {e}")
+    
+    await interaction.followup.send(f"✅ **{formatted_location}** actualitzat a {dim.capitalize()}!", ephemeral=True)
+
 @bot.tree.command(name="deletecoords", description="Elimina coordenades existents")
 @app_commands.describe(
     location="Ubicació a eliminar",
