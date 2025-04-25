@@ -425,5 +425,33 @@ async def linkcoords_cmd(interaction: discord.Interaction, location: str):
     
     await interaction.followup.send(embed=embed)
 
+@bot.tree.command(name="stats", description="Mostra estadístiques d'ús del bot")
+async def stats_cmd(interaction: discord.Interaction):
+    await interaction.response.defer()
+    
+    coords_data = load_coords()
+    stats = {
+        "total_coords": sum(len(dim) for dim in coords_data["dimensions"].values()),
+        "dim_usage": {dim: len(coords_data["dimensions"][dim]) for dim in ["overworld", "nether", "end"]},
+        "top_users": {}
+    }
+    
+    # Calcula usuari més actiu (requereix guardar dades addicionals)
+    # (Afegeix aquesta lògica a les funcions save_coords/load_coords si vols implementar-ho)
+    
+    embed = Embed(title="📊 ESTADÍSTIQUES DEL BOT", color=0x00FFFF)
+    embed.add_field(name="🌐 Total Coordenades", value=f"```{stats['total_coords']}```", inline=True)
+    
+    # Dimensió més popular
+    top_dim = max(stats["dim_usage"], key=stats["dim_usage"].get)
+    embed.add_field(name="🏆 Dimensió Més Utilitzada", 
+                   value=f"{DIMENSION_EMOJIS[top_dim]} {top_dim.capitalize()} ({stats['dim_usage'][top_dim]})", 
+                   inline=True)
+    
+    # Última actualització (exemple)
+    embed.set_footer(text="🔄 Última actualització: Ara mateix")  
+    
+    await interaction.followup.send(embed=embed)
+
 # ---------- RUN BOT ----------
 bot.run(TOKEN)
