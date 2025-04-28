@@ -19,4 +19,4 @@ __pycache__/
 .vscode/
 
 # Ignora carpeta de backups
-.backups/
+.backups
