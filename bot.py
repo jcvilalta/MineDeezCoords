@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import datetime
+from datetime import UTC
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -92,7 +93,7 @@ def load_coords() -> dict:
         }
 
 def save_coords(data: dict) -> None:
-    data["metadata"]["last_updated"] = datetime.datetime.utcnow().isoformat()
+    data["metadata"]["last_updated"] = datetime.datetime.now(UTC).isoformat()
     with open(coords_file, "w", encoding='utf-8') as file:
         json.dump(data, file, indent=4, ensure_ascii=False)
 
@@ -157,7 +158,7 @@ def create_backup():
     """Crea una còpia de seguretat diària"""
     try:
         os.makedirs(backup_dir, exist_ok=True)
-        timestamp = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         backup_path = os.path.join(backup_dir, f"coordinates_{timestamp}.json")
         shutil.copy2(coords_file, backup_path)
         return backup_path
@@ -173,15 +174,6 @@ async def daily_backup():
         print(f"✅ Còpia de seguretat creada: {backup_path}")
 
 # ---------- COMMANDS ----------
-@bot.event
-async def on_ready():
-    print(f"✅ Connectat com a {bot.user}")
-    try:
-        await bot.tree.sync()
-        print("🔁 Comandes GLOBALS sincronitzades!")
-    except Exception as e:
-        print(f"❌ Error: {str(e)}")
-
 @bot.command()
 @commands.is_owner()
 async def sync(ctx):
@@ -210,7 +202,7 @@ async def coords_cmd(interaction: discord.Interaction, location: str, dimension:
     
     formatted_location = format_location_name(location)
     coords_data["dimensions"][dim][formatted_location] = {"x": x, "y": y, "z": z}
-    update_user_activity(coords_data, interaction.user)  # Nou
+    update_user_activity(coords_data, interaction.user)
     save_coords(coords_data)
     
     embed = create_global_embed(coords_data)
@@ -334,7 +326,7 @@ async def editcoords_cmd(interaction: discord.Interaction,
         return
     
     coords_data["dimensions"][dim][formatted_location] = {"x": x, "y": y, "z": z}
-    update_user_activity(coords_data, interaction.user)  # Nou
+    update_user_activity(coords_data, interaction.user)
     save_coords(coords_data)
     
     channel = interaction.channel
@@ -400,7 +392,7 @@ async def deletecoords_cmd(interaction: discord.Interaction, location: str = Non
     await view.wait()
     
     if view.confirmed:
-        update_user_activity(coords_data, interaction.user)  # Nou
+        update_user_activity(coords_data, interaction.user)
         save_coords(coords_data)
         await interaction.edit_original_response(content=f"✅ S'ha eliminat: **{target}**")
         
@@ -457,28 +449,14 @@ async def stats_cmd(interaction: discord.Interaction):
     
     embed.add_field(name="🔄 Última Actualització", value=f"`{last_updated_str}`", inline=False)
     embed.add_field(name="👤 Usuari Més Actiu", value=f"`{top_user_name}`", inline=False)
-    @bot.event
-async def on_ready():
-    print(f"✅ Connectat com a {bot.user}")
-    try:
-        await bot.tree.sync()
-        print("🔁 Comandes GLOBALS sincronitzades!")
-    except Exception as e:
-        print(f"❌ Error: {str(e)}")
     
-    # Iniciar sistema de còpies
-    os.makedirs(backup_dir, exist_ok=True)
-    daily_backup.start()
-    print("🔧 Sistema de còpies activat")
     await interaction.followup.send(embed=embed)
 
 @bot.tree.command(name="backup", description="Descarrega l'última còpia de seguretat")
 async def backup_cmd(interaction: discord.Interaction):
-    """Mostra l'última còpia de seguretat disponible"""
     await interaction.response.defer(ephemeral=True)
     
     try:
-        # Obtenir llista de backups ordenades
         backups = sorted(
             [f for f in os.listdir(backup_dir) if f.startswith("coordinates_")],
             reverse=True
@@ -513,7 +491,6 @@ async def on_ready():
     os.makedirs(backup_dir, exist_ok=True)
     daily_backup.start()
     print("🔧 Sistema de còpies activat")
-
 
 # ---------- RUN BOT ----------
 bot.run(TOKEN)

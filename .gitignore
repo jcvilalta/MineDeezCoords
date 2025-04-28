@@ -17,3 +17,6 @@ __pycache__/
 # Ignora configuracions d'IDE
 .idea/
 .vscode/
+
+# Ignora carpeta de backups
+.backups/
