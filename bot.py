@@ -1,10 +1,12 @@
 # Import required libraries
 import discord
 from discord import app_commands, Embed, ButtonStyle
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord.ui import Button, View
 import json
 import os
+import shutil
+import datetime
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -20,6 +22,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # File to store coordinates data
 coords_file = "coordinates.json"
+backup_dir = "backups"
 
 # Emoji mapping for different dimensions
 DIMENSION_EMOJIS = {
@@ -56,12 +59,22 @@ def load_coords() -> dict:
     try:
         with open(coords_file, "r", encoding='utf-8') as file:
             data = json.load(file)
+            # Inicialitzar metadades si no existeixen
+            if "metadata" not in data:
+                data["metadata"] = {
+                    "last_updated": None,
+                    "user_activity": {}
+                }
             return {
                 "messages": {str(k): v for k, v in data.get("messages", {}).items()},
                 "dimensions": data.get("dimensions", {
                     "overworld": {},
                     "nether": {},
                     "end": {}
+                }),
+                "metadata": data.get("metadata", {
+                    "last_updated": None,
+                    "user_activity": {}
                 })
             }
     except (FileNotFoundError, json.JSONDecodeError):
@@ -71,10 +84,15 @@ def load_coords() -> dict:
                 "overworld": {},
                 "nether": {},
                 "end": {}
+            },
+            "metadata": {
+                "last_updated": None,
+                "user_activity": {}
             }
         }
 
 def save_coords(data: dict) -> None:
+    data["metadata"]["last_updated"] = datetime.datetime.utcnow().isoformat()
     with open(coords_file, "w", encoding='utf-8') as file:
         json.dump(data, file, indent=4, ensure_ascii=False)
 
@@ -100,6 +118,11 @@ def create_global_embed(coords_data: dict) -> Embed:
         embed.add_field(name="\u200b", value="\n".join(content), inline=False)
     
     return embed
+
+def update_user_activity(data: dict, user: discord.User):
+    """Actualitza les estadístiques d'activitat de l'usuari"""
+    user_id = str(user.id)
+    data["metadata"]["user_activity"][user_id] = data["metadata"]["user_activity"].get(user_id, 0) + 1
 
 # ---------- AUTOCOMPLETE ----------
 async def location_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice]:
@@ -128,6 +151,26 @@ class ConfirmDeleteView(View):
     async def cancel(self, interaction: discord.Interaction, button: Button):
         self.stop()
         await interaction.response.edit_message(content="❌ Acció cancel·lada", view=None)
+
+# ---------- BACKUP SYSTEM ----------
+def create_backup():
+    """Crea una còpia de seguretat diària"""
+    try:
+        os.makedirs(backup_dir, exist_ok=True)
+        timestamp = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        backup_path = os.path.join(backup_dir, f"coordinates_{timestamp}.json")
+        shutil.copy2(coords_file, backup_path)
+        return backup_path
+    except Exception as e:
+        print(f"❌ Error en crear còpia: {str(e)}")
+        return None
+
+@tasks.loop(hours=24)
+async def daily_backup():
+    """Tasca programada per còpies diàries"""
+    backup_path = await bot.loop.run_in_executor(None, create_backup)
+    if backup_path:
+        print(f"✅ Còpia de seguretat creada: {backup_path}")
 
 # ---------- COMMANDS ----------
 @bot.event
@@ -167,6 +210,7 @@ async def coords_cmd(interaction: discord.Interaction, location: str, dimension:
     
     formatted_location = format_location_name(location)
     coords_data["dimensions"][dim][formatted_location] = {"x": x, "y": y, "z": z}
+    update_user_activity(coords_data, interaction.user)  # Nou
     save_coords(coords_data)
     
     embed = create_global_embed(coords_data)
@@ -285,16 +329,14 @@ async def editcoords_cmd(interaction: discord.Interaction,
     dim = dimension
     formatted_location = format_location_name(location)
     
-    # Verificar si l'ubicació existeix a la dimensió
     if formatted_location not in coords_data["dimensions"][dim]:
         await interaction.followup.send(f"❌ `{formatted_location}` no existeix a {dim.capitalize()}!", ephemeral=True)
         return
     
-    # Actualitzar coordenades
     coords_data["dimensions"][dim][formatted_location] = {"x": x, "y": y, "z": z}
+    update_user_activity(coords_data, interaction.user)  # Nou
     save_coords(coords_data)
     
-    # Actualitzar missatge global
     channel = interaction.channel
     channel_id = str(channel.id)
     try:
@@ -358,10 +400,10 @@ async def deletecoords_cmd(interaction: discord.Interaction, location: str = Non
     await view.wait()
     
     if view.confirmed:
+        update_user_activity(coords_data, interaction.user)  # Nou
         save_coords(coords_data)
         await interaction.edit_original_response(content=f"✅ S'ha eliminat: **{target}**")
         
-        # Actualitza missatge global
         channel = interaction.channel
         channel_id = str(channel.id)
         if channel_id in coords_data["messages"]:
@@ -375,56 +417,6 @@ async def deletecoords_cmd(interaction: discord.Interaction, location: str = Non
     else:
         await interaction.edit_original_response(content="❌ Acció cancel·lada")
 
-@bot.tree.command(name="linkcoords", description="Mostra coordenades vinculades entre dimensions")
-@app_commands.describe(location="Ubicació a vincular")
-@app_commands.autocomplete(location=location_autocomplete)
-async def linkcoords_cmd(interaction: discord.Interaction, location: str):
-    await interaction.response.defer()
-    
-    coords_data = load_coords()
-    formatted_location = format_location_name(location)
-    embed = Embed(title=f"🔗 COORDENADES VINCULADES: {formatted_location}", color=0x00FF00)
-    
-    found = False
-    for dim in ["overworld", "nether", "end"]:
-        if formatted_location in coords_data["dimensions"][dim]:
-            coord = coords_data["dimensions"][dim][formatted_location]
-            embed.add_field(
-                name=f"{DIMENSION_EMOJIS[dim]} {dim.capitalize()}",
-                value=f"```X={coord['x']} | Y={coord['y']} | Z={coord['z']}```",
-                inline=False
-            )
-            found = True
-            
-            # Calcula coordenades vinculades Overworld <-> Nether
-            if dim == "overworld":
-                nether_coords = {
-                    "x": coord["x"] // 8,
-                    "y": coord["y"],
-                    "z": coord["z"] // 8
-                }
-                embed.add_field(
-                    name="⚡ Calcul Nether",
-                    value=f"```X={nether_coords['x']} | Y={nether_coords['y']} | Z={nether_coords['z']}```",
-                    inline=False
-                )
-            elif dim == "nether":
-                overworld_coords = {
-                    "x": coord["x"] * 8,
-                    "y": coord["y"],
-                    "z": coord["z"] * 8
-                }
-                embed.add_field(
-                    name="⚡ Calcul Overworld",
-                    value=f"```X={overworld_coords['x']} | Y={overworld_coords['y']} | Z={overworld_coords['z']}```",
-                    inline=False
-                )
-    
-    if not found:
-        embed.description = f"🚫 Ubicació no trobada: `{formatted_location}`"
-    
-    await interaction.followup.send(embed=embed)
-
 @bot.tree.command(name="stats", description="Mostra estadístiques d'ús del bot")
 async def stats_cmd(interaction: discord.Interaction):
     await interaction.response.defer()
@@ -433,25 +425,95 @@ async def stats_cmd(interaction: discord.Interaction):
     stats = {
         "total_coords": sum(len(dim) for dim in coords_data["dimensions"].values()),
         "dim_usage": {dim: len(coords_data["dimensions"][dim]) for dim in ["overworld", "nether", "end"]},
-        "top_users": {}
     }
     
-    # Calcula usuari més actiu (requereix guardar dades addicionals)
-    # (Afegeix aquesta lògica a les funcions save_coords/load_coords si vols implementar-ho)
+    # Última actualització
+    last_updated = coords_data["metadata"]["last_updated"]
+    if last_updated:
+        dt = datetime.datetime.fromisoformat(last_updated)
+        last_updated_str = dt.strftime("%d/%m/%Y %H:%M:%S")
+    else:
+        last_updated_str = "Mai"
+        
+    # Usuari més actiu
+    user_activity = coords_data["metadata"]["user_activity"]
+    if user_activity:
+        top_user_id = max(user_activity, key=user_activity.get)
+        try:
+            top_user = await bot.fetch_user(int(top_user_id))
+            top_user_name = f"{top_user.name} ({user_activity[top_user_id]} accions)"
+        except:
+            top_user_name = "Usuari desconegut"
+    else:
+        top_user_name = "Cap acció registrada"
     
     embed = Embed(title="📊 ESTADÍSTIQUES DEL BOT", color=0x00FFFF)
     embed.add_field(name="🌐 Total Coordenades", value=f"```{stats['total_coords']}```", inline=True)
     
-    # Dimensió més popular
     top_dim = max(stats["dim_usage"], key=stats["dim_usage"].get)
     embed.add_field(name="🏆 Dimensió Més Utilitzada", 
                    value=f"{DIMENSION_EMOJIS[top_dim]} {top_dim.capitalize()} ({stats['dim_usage'][top_dim]})", 
                    inline=True)
     
-    # Última actualització (exemple)
-    embed.set_footer(text="🔄 Última actualització: Ara mateix")  
+    embed.add_field(name="🔄 Última Actualització", value=f"`{last_updated_str}`", inline=False)
+    embed.add_field(name="👤 Usuari Més Actiu", value=f"`{top_user_name}`", inline=False)
+    @bot.event
+async def on_ready():
+    print(f"✅ Connectat com a {bot.user}")
+    try:
+        await bot.tree.sync()
+        print("🔁 Comandes GLOBALS sincronitzades!")
+    except Exception as e:
+        print(f"❌ Error: {str(e)}")
     
+    # Iniciar sistema de còpies
+    os.makedirs(backup_dir, exist_ok=True)
+    daily_backup.start()
+    print("🔧 Sistema de còpies activat")
     await interaction.followup.send(embed=embed)
+
+@bot.tree.command(name="backup", description="Descarrega l'última còpia de seguretat")
+async def backup_cmd(interaction: discord.Interaction):
+    """Mostra l'última còpia de seguretat disponible"""
+    await interaction.response.defer(ephemeral=True)
+    
+    try:
+        # Obtenir llista de backups ordenades
+        backups = sorted(
+            [f for f in os.listdir(backup_dir) if f.startswith("coordinates_")],
+            reverse=True
+        )
+        
+        if not backups:
+            await interaction.followup.send("🚫 No hi ha còpies disponibles", ephemeral=True)
+            return
+            
+        latest_backup = os.path.join(backup_dir, backups[0])
+        await interaction.followup.send(
+            content=f"📂 Última còpia: `{backups[0]}`",
+            file=discord.File(latest_backup),
+            ephemeral=True
+        )
+    except FileNotFoundError:
+        await interaction.followup.send("❌ La carpeta de backups no existeix", ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=True)
+
+# ---------- BOT EVENTS ----------
+@bot.event
+async def on_ready():
+    print(f"✅ Connectat com a {bot.user}")
+    try:
+        await bot.tree.sync()
+        print("🔁 Comandes GLOBALS sincronitzades!")
+    except Exception as e:
+        print(f"❌ Error: {str(e)}")
+    
+    # Iniciar sistema de còpies
+    os.makedirs(backup_dir, exist_ok=True)
+    daily_backup.start()
+    print("🔧 Sistema de còpies activat")
+
 
 # ---------- RUN BOT ----------
 bot.run(TOKEN)
