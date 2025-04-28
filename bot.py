@@ -60,7 +60,6 @@ def load_coords() -> dict:
     try:
         with open(coords_file, "r", encoding='utf-8') as file:
             data = json.load(file)
-            # Inicialitzar metadades si no existeixen
             if "metadata" not in data:
                 data["metadata"] = {
                     "last_updated": None,
@@ -232,7 +231,13 @@ async def coords_cmd(interaction: discord.Interaction, location: str, dimension:
 @bot.tree.command(name="getcoords", description="Mostra coordenades amb filtres")
 @app_commands.describe(
     dimension="Filtra per dimensió",
-    location="Cerca una ubicació específica"
+    location="Cerca una ubicació específica",
+    x_min="Valor mínim per X",
+    x_max="Valor màxim per X",
+    y_min="Valor mínim per Y",
+    y_max="Valor màxim per Y",
+    z_min="Valor mínim per Z",
+    z_max="Valor màxim per Z"
 )
 @app_commands.choices(dimension=[
     app_commands.Choice(name="Overworld", value="overworld"),
@@ -240,23 +245,21 @@ async def coords_cmd(interaction: discord.Interaction, location: str, dimension:
     app_commands.Choice(name="End", value="end")
 ])
 @app_commands.autocomplete(location=location_autocomplete)
-async def getcoords_cmd(interaction: discord.Interaction, dimension: str = None, location: str = None):
+async def getcoords_cmd(interaction: discord.Interaction, 
+                       dimension: str = None,
+                       location: str = None,
+                       x_min: int = None,
+                       x_max: int = None,
+                       y_min: int = None,
+                       y_max: int = None,
+                       z_min: int = None,
+                       z_max: int = None):
     await interaction.response.defer()
     
     coords_data = load_coords()
     embed = Embed(color=0xBF40BF)
 
-    if dimension:
-        dim_emoji = DIMENSION_EMOJIS[dimension]
-        entries = coords_data["dimensions"][dimension]
-        
-        if entries:
-            content = "\n".join([f"{loc}: X={c['x']} Y={c['y']} Z={c['z']}" for loc, c in entries.items()])
-            embed.description = f"{dim_emoji}**COORDENADES DE L'{dimension.upper()}:**\n```\n{content}\n```"
-        else:
-            embed.description = f"{dim_emoji}**COORDENADES DE L'{dimension.upper()}:**\n```🚫 Cap coordenada```"
-
-    elif location:
+    if location:
         formatted_location = format_location_name(location)
         found = False
         content = []
@@ -272,26 +275,41 @@ async def getcoords_cmd(interaction: discord.Interaction, dimension: str = None,
             embed.description = f"🔍 **COORDENADES DE '{formatted_location}':**\n```\n" + "\n".join(content) + "\n```"
         else:
             embed.description = f"🔍 **COORDENADES DE '{formatted_location}':**\n```🚫 No trobada```"
-
     else:
-        embed.title = "🌍 COORDENADES GLOBALS"
+        filtered_coords = {"overworld": {}, "nether": {}, "end": {}}
+        
         for dim_name in ["overworld", "nether", "end"]:
-            entries = coords_data["dimensions"][dim_name]
-            emoji = DIMENSION_EMOJIS[dim_name]
-            
-            if entries:
-                content = "\n".join([f"{loc}: X={c['x']} Y={c['y']} Z={c['z']}" for loc, c in entries.items()])
-                embed.add_field(
-                    name=f"{emoji} **{dim_name.upper()}**",
-                    value=f"```\n{content}\n```",
-                    inline=False
-                )
-            else:
-                embed.add_field(
-                    name=f"{emoji} **{dim_name.upper()}**",
-                    value="```🚫 Cap coordenada```",
-                    inline=False
-                )
+            if dimension and dim_name != dimension:
+                continue
+                
+            for loc_name, coords in coords_data["dimensions"][dim_name].items():
+                x_ok = (x_min is None or coords["x"] >= x_min) and (x_max is None or coords["x"] <= x_max)
+                y_ok = (y_min is None or coords["y"] >= y_min) and (y_max is None or coords["y"] <= y_max)
+                z_ok = (z_min is None or coords["z"] >= z_min) and (z_max is None or coords["z"] <= z_max)
+                
+                if x_ok and y_ok and z_ok:
+                    filtered_coords[dim_name][loc_name] = coords
+        
+        total_results = sum(len(dim) for dim in filtered_coords.values())
+        
+        if total_results == 0:
+            embed.description = "🚫 No s'han trobat coordenades amb els filtres aplicats"
+        else:
+            embed.title = f"🌍 COORDENADES FILTRADES ({total_results} resultats)"
+            for dim_name in ["overworld", "nether", "end"]:
+                entries = filtered_coords[dim_name]
+                emoji = DIMENSION_EMOJIS[dim_name]
+                
+                if entries:
+                    content = "\n".join(
+                        f"{loc}: X={c['x']} Y={c['y']} Z={c['z']}" 
+                        for loc, c in entries.items()
+                    )
+                    embed.add_field(
+                        name=f"{emoji} {dim_name.capitalize()}",
+                        value=f"```\n{content}\n```",
+                        inline=False
+                    )
     
     await interaction.followup.send(embed=embed)
 
@@ -419,7 +437,6 @@ async def stats_cmd(interaction: discord.Interaction):
         "dim_usage": {dim: len(coords_data["dimensions"][dim]) for dim in ["overworld", "nether", "end"]},
     }
     
-    # Última actualització
     last_updated = coords_data["metadata"]["last_updated"]
     if last_updated:
         dt = datetime.datetime.fromisoformat(last_updated)
@@ -427,7 +444,6 @@ async def stats_cmd(interaction: discord.Interaction):
     else:
         last_updated_str = "Mai"
         
-    # Usuari més actiu
     user_activity = coords_data["metadata"]["user_activity"]
     if user_activity:
         top_user_id = max(user_activity, key=user_activity.get)
