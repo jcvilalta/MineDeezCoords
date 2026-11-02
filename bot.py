@@ -371,6 +371,53 @@ async def editcoords_cmd(interaction: discord.Interaction,
     
     await interaction.followup.send(f"✅ **{formatted_location}** actualitzat a {dim.capitalize()}!", ephemeral=True)
 
+@bot.tree.command(name="distance", description="Calcula la distància i el recorregut de túnel entre dues ubicacions")
+@app_commands.describe(
+    loc1="Primera ubicació",
+    loc2="Segona ubicació"
+)
+@app_commands.autocomplete(loc1=location_autocomplete, loc2=location_autocomplete)
+async def distance_cmd(interaction: discord.Interaction, loc1: str, loc2: str):
+    await interaction.response.defer()
+
+    coords_data = load_coords()
+    f1 = format_location_name(loc1)
+    f2 = format_location_name(loc2)
+
+    coord1 = None
+    dim1 = None
+    coord2 = None
+    dim2 = None
+
+    for d in ["overworld", "nether", "end"]:
+        if f1 in coords_data["dimensions"][d]:
+            coord1 = coords_data["dimensions"][d][f1]
+            dim1 = d
+        if f2 in coords_data["dimensions"][d]:
+            coord2 = coords_data["dimensions"][d][f2]
+            dim2 = d
+
+    if not coord1 or not coord2:
+        missing = f1 if not coord1 else f2
+        await interaction.followup.send(f"❌ No s'ha trobat la ubicació: `{missing}`", ephemeral=True)
+        return
+
+    x1, z1 = coord1["x"], coord1["z"]
+    x2, z2 = coord2["x"], coord2["z"]
+
+    dx = abs(x2 - x1)
+    dz = abs(z2 - z1)
+    import math
+    dist_2d = math.sqrt(dx**2 + dz**2)
+    tunnel_dist = dx + dz
+
+    embed = Embed(title="📏 CÀLCUL DE DISTÀNCIA", color=0x00FF00)
+    embed.add_field(name="📍 Origen", value=f"**{f1}** ({dim1.capitalize()})\nX={x1}, Z={z1}", inline=True)
+    embed.add_field(name="🎯 Destí", value=f"**{f2}** ({dim2.capitalize()})\nX={x2}, Z={z2}", inline=True)
+    embed.add_field(name="📐 Resultat", value=f"```\n• Distància Directa (Diagonal): {dist_2d:.1f} blocs\n• Distància Túnel (Eixos X+Z): {tunnel_dist} blocs\n```", inline=False)
+
+    await interaction.followup.send(embed=embed)
+
 @bot.tree.command(name="deletecoords", description="Elimina coordenades existents")
 @app_commands.describe(
     location="Ubicació a eliminar",
