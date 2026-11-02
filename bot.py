@@ -32,6 +32,16 @@ DIMENSION_EMOJIS = {
     "end": "😈"
 }
 
+# Emoji mapping for categories
+CATEGORY_EMOJIS = {
+    "granges": "🌾",
+    "portals": "🌀",
+    "bases": "🏰",
+    "mines": "⛏️",
+    "pobles": "🏠",
+    "altres": "📌"
+}
+
 # ---------- HELPERS ----------
 def format_location_name(location: str) -> str:
     """Formats location names following Catalan rules while preserving mid-word capitals."""
@@ -97,7 +107,9 @@ def save_coords(data: dict) -> None:
         json.dump(data, file, indent=4, ensure_ascii=False)
 
 def format_coord_line(dim_name: str, loc: str, c: dict) -> str:
-    line = f"{loc}: X={c['x']} Y={c['y']} Z={c['z']}"
+    cat = c.get("category", "altres")
+    emoji = CATEGORY_EMOJIS.get(cat, "📌")
+    line = f"{emoji} {loc}: X={c['x']} Y={c['y']} Z={c['z']}"
     if dim_name == "overworld":
         nx, nz = round(c['x'] / 8), round(c['z'] / 8)
         line += f"\n  ↳ Nether: X={nx} Y={c['y']} Z={nz}"
@@ -196,21 +208,33 @@ async def sync(ctx):
     dimension="Dimensió",
     x="Coordenada X",
     y="Coordenada Y",
-    z="Coordenada Z"
+    z="Coordenada Z",
+    category="Categoria de la ubicació"
 )
-@app_commands.choices(dimension=[
-    app_commands.Choice(name="Overworld", value="overworld"),
-    app_commands.Choice(name="Nether", value="nether"),
-    app_commands.Choice(name="End", value="end")
-])
-async def coords_cmd(interaction: discord.Interaction, location: str, dimension: app_commands.Choice[str], x: int, y: int, z: int):
+@app_commands.choices(
+    dimension=[
+        app_commands.Choice(name="Overworld", value="overworld"),
+        app_commands.Choice(name="Nether", value="nether"),
+        app_commands.Choice(name="End", value="end")
+    ],
+    category=[
+        app_commands.Choice(name="🌾 Granges", value="granges"),
+        app_commands.Choice(name="🌀 Portals", value="portals"),
+        app_commands.Choice(name="🏰 Bases", value="bases"),
+        app_commands.Choice(name="⛏️ Mines", value="mines"),
+        app_commands.Choice(name="🏠 Pobles/Cases", value="pobles"),
+        app_commands.Choice(name="📌 Altres", value="altres")
+    ]
+)
+async def coords_cmd(interaction: discord.Interaction, location: str, dimension: app_commands.Choice[str], x: int, y: int, z: int, category: app_commands.Choice[str] = None):
     await interaction.response.defer()
-    
+
     coords_data = load_coords()
     dim = dimension.value
-    
+    cat = category.value if category else "altres"
+
     formatted_location = format_location_name(location)
-    coords_data["dimensions"][dim][formatted_location] = {"x": x, "y": y, "z": z}
+    coords_data["dimensions"][dim][formatted_location] = {"x": x, "y": y, "z": z, "category": cat}
     update_user_activity(coords_data, interaction.user)
     save_coords(coords_data)
     
@@ -330,31 +354,45 @@ async def getcoords_cmd(interaction: discord.Interaction,
     dimension="Dimensió",
     x="Nova coordenada X",
     y="Nova coordenada Y",
-    z="Nova coordenada Z"
+    z="Nova coordenada Z",
+    category="Nova categoria (opcional)"
 )
-@app_commands.choices(dimension=[
-    app_commands.Choice(name="Overworld", value="overworld"),
-    app_commands.Choice(name="Nether", value="nether"),
-    app_commands.Choice(name="End", value="end")
-])
+@app_commands.choices(
+    dimension=[
+        app_commands.Choice(name="Overworld", value="overworld"),
+        app_commands.Choice(name="Nether", value="nether"),
+        app_commands.Choice(name="End", value="end")
+    ],
+    category=[
+        app_commands.Choice(name="🌾 Granges", value="granges"),
+        app_commands.Choice(name="🌀 Portals", value="portals"),
+        app_commands.Choice(name="🏰 Bases", value="bases"),
+        app_commands.Choice(name="⛏️ Mines", value="mines"),
+        app_commands.Choice(name="🏠 Pobles/Cases", value="pobles"),
+        app_commands.Choice(name="📌 Altres", value="altres")
+    ]
+)
 @app_commands.autocomplete(location=location_autocomplete)
-async def editcoords_cmd(interaction: discord.Interaction, 
-                        location: str, 
-                        dimension: str, 
-                        x: int, 
-                        y: int, 
-                        z: int):
+async def editcoords_cmd(interaction: discord.Interaction,
+                        location: str,
+                        dimension: str,
+                        x: int,
+                        y: int,
+                        z: int,
+                        category: app_commands.Choice[str] = None):
     await interaction.response.defer()
-    
+
     coords_data = load_coords()
     dim = dimension
     formatted_location = format_location_name(location)
-    
+
     if formatted_location not in coords_data["dimensions"][dim]:
         await interaction.followup.send(f"❌ `{formatted_location}` no existeix a {dim.capitalize()}!", ephemeral=True)
         return
-    
-    coords_data["dimensions"][dim][formatted_location] = {"x": x, "y": y, "z": z}
+
+    existing_cat = coords_data["dimensions"][dim][formatted_location].get("category", "altres")
+    cat = category.value if category else existing_cat
+    coords_data["dimensions"][dim][formatted_location] = {"x": x, "y": y, "z": z, "category": cat}
     update_user_activity(coords_data, interaction.user)
     save_coords(coords_data)
     
