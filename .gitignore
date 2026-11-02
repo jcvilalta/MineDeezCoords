@@ -1,0 +1,26 @@
+# Python & Bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+*.log
+*.pot
+*.pyc
+
+# Virtual Environments
+.venv/
+venv/
+*.venv
+.env/
+
+# Sensitive / Data files
+.env
+coordinates.json
+coordinates2.json
+
+# IDE / Configs
+.idea/
+.vscode/
+.DS_Store
+
+# Backups
+/backups/
