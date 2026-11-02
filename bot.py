@@ -96,6 +96,16 @@ def save_coords(data: dict) -> None:
     with open(coords_file, "w", encoding='utf-8') as file:
         json.dump(data, file, indent=4, ensure_ascii=False)
 
+def format_coord_line(dim_name: str, loc: str, c: dict) -> str:
+    line = f"{loc}: X={c['x']} Y={c['y']} Z={c['z']}"
+    if dim_name == "overworld":
+        nx, nz = round(c['x'] / 8), round(c['z'] / 8)
+        line += f" (Nether: X={nx} Y={c['y']} Z={nz})"
+    elif dim_name == "nether":
+        ox, oz = c['x'] * 8, c['z'] * 8
+        line += f" (Overworld: X={ox} Y={c['y']} Z={oz})"
+    return line
+
 def create_global_embed(coords_data: dict) -> Embed:
     """Crea l'embed global amb totes les coordenades"""
     embed = Embed(
@@ -110,16 +120,7 @@ def create_global_embed(coords_data: dict) -> Embed:
         
         if entries:
             content = [f"{emoji} **{dim_name.capitalize()}**"]
-            coord_lines = []
-            for loc, c in entries.items():
-                line = f"{loc}: X={c['x']} Y={c['y']} Z={c['z']}"
-                if dim_name == "overworld":
-                    nx, nz = round(c['x'] / 8), round(c['z'] / 8)
-                    line += f" (Nether: X={nx} Y={c['y']} Z={nz})"
-                elif dim_name == "nether":
-                    ox, oz = c['x'] * 8, c['z'] * 8
-                    line += f" (Overworld: X={ox} Y={c['y']} Z={oz})"
-                coord_lines.append(line)
+            coord_lines = [format_coord_line(dim_name, loc, c) for loc, c in entries.items()]
             content.append(f"```\n" + "\n".join(coord_lines) + "\n```")
         else:
             content = [f"{emoji} **{dim_name.capitalize()}**", "```\n🚫 Sense coordenades\n```"]
