@@ -110,7 +110,16 @@ def create_global_embed(coords_data: dict) -> Embed:
         
         if entries:
             content = [f"{emoji} **{dim_name.capitalize()}**"]
-            coord_lines = [f"{loc}: X={c['x']} Y={c['y']} Z={c['z']}" for loc, c in entries.items()]
+            coord_lines = []
+            for loc, c in entries.items():
+                line = f"{loc}: X={c['x']} Y={c['y']} Z={c['z']}"
+                if dim_name == "overworld":
+                    nx, nz = round(c['x'] / 8), round(c['z'] / 8)
+                    line += f" (Nether: X={nx} Y={c['y']} Z={nz})"
+                elif dim_name == "nether":
+                    ox, oz = c['x'] * 8, c['z'] * 8
+                    line += f" (Overworld: X={ox} Y={c['y']} Z={oz})"
+                coord_lines.append(line)
             content.append(f"```\n" + "\n".join(coord_lines) + "\n```")
         else:
             content = [f"{emoji} **{dim_name.capitalize()}**", "```\n🚫 Sense coordenades\n```"]
