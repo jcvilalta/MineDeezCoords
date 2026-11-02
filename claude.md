@@ -7,11 +7,11 @@ MineDeezCoords is a Python-based Discord bot (`discord.py`) designed for managin
 
 How it works:
 1. Discord Bot Engine (`bot.py`): Handles slash commands, interactive buttons, views, and automated status/embed updates.
-2. Persistent Storage (`coordinates.json` & backups): Saves and loads location records persistently for 3 dimensions (Overworld 🌳, Nether 👹, End 😈) with automatic timestamped backups.
+2. Persistent Storage (`coordinates.json` & backups): Saves and loads location records persistently for 3 dimensions (Overworld 🌳, Nether 👹, End😈) with automatic timestamped backups.
 3. Catalan Formatting (`format_location_name`): Formats location names following Catalan grammar and preposition rules while preserving mid-word capitals.
 
 # For who
-This is for me, Joaquim. I'm a photographer and filmmaker, and I want to keep everything organized and accessible. I'm not a programmer, but I have a little bit of technical knowledge, so I want you to explain changes to the app in one sentence and keep them easy to understand.
+This is for me, Joaquim. I'm a photographer and filmmaker, and I want to keep everything organized and accessible. I'm not a programmer, but I havea little bit of technical knowledge, so I want you to explain changes to the app in one sentence and keep them easy to understand.
 
 # Rules
 1. Always, before a change, first plan and wait until I say yes.
