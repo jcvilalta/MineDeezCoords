@@ -273,35 +273,36 @@ async def getcoords_cmd(interaction: discord.Interaction,
         formatted_location = format_location_name(location)
         found = False
         content = []
-        
+
         for dim_name in ["overworld", "nether", "end"]:
             entries = coords_data["dimensions"][dim_name]
             if formatted_location in entries:
                 coord = entries[formatted_location]
-                content.append(f"{DIMENSION_EMOJIS[dim_name]} {dim_name.capitalize()}: X={coord['x']} Y={coord['y']} Z={coord['z']}")
+                line = format_coord_line(dim_name, formatted_location, coord)
+                content.append(f"{DIMENSION_EMOJIS[dim_name]} {dim_name.capitalize()}: {line}")
                 found = True
-                
+
         if found:
             embed.description = f"🔍 **COORDENADES DE '{formatted_location}':**\n```\n" + "\n".join(content) + "\n```"
         else:
-            embed.description = f"🔍 **COORDENADES DE '{formatted_location}':**\n```🚫 No trobada```"
+            embed.description = f"🔍 **COORDENADES DE '{formatted_location}':**\n```\n🚫 No trobada\n```"
     else:
         filtered_coords = {"overworld": {}, "nether": {}, "end": {}}
-        
+
         for dim_name in ["overworld", "nether", "end"]:
             if dimension and dim_name != dimension:
                 continue
-                
+
             for loc_name, coords in coords_data["dimensions"][dim_name].items():
                 x_ok = (x_min is None or coords["x"] >= x_min) and (x_max is None or coords["x"] <= x_max)
                 y_ok = (y_min is None or coords["y"] >= y_min) and (y_max is None or coords["y"] <= y_max)
                 z_ok = (z_min is None or coords["z"] >= z_min) and (z_max is None or coords["z"] <= z_max)
-                
+
                 if x_ok and y_ok and z_ok:
                     filtered_coords[dim_name][loc_name] = coords
-        
+
         total_results = sum(len(dim) for dim in filtered_coords.values())
-        
+
         if total_results == 0:
             embed.description = "🚫 No s'han trobat coordenades amb els filtres aplicats"
         else:
@@ -309,10 +310,10 @@ async def getcoords_cmd(interaction: discord.Interaction,
             for dim_name in ["overworld", "nether", "end"]:
                 entries = filtered_coords[dim_name]
                 emoji = DIMENSION_EMOJIS[dim_name]
-                
+
                 if entries:
                     content = "\n".join(
-                        f"{loc}: X={c['x']} Y={c['y']} Z={c['z']}" 
+                        format_coord_line(dim_name, loc, c)
                         for loc, c in entries.items()
                     )
                     embed.add_field(
