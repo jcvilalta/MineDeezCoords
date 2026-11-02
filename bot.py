@@ -409,6 +409,106 @@ async def editcoords_cmd(interaction: discord.Interaction,
     
     await interaction.followup.send(f"✅ **{formatted_location}** actualitzat a {dim.capitalize()}!", ephemeral=True)
 
+@bot.tree.command(name="calc", description="Calcula coordenada de portal ràpidament")
+@app_commands.describe(
+    x="Coordenada X",
+    y="Coordenada Y",
+    z="Coordenada Z",
+    dimension="Dimensió original"
+)
+@app_commands.choices(dimension=[
+    app_commands.Choice(name="Overworld", value="overworld"),
+    app_commands.Choice(name="Nether", value="nether"),
+    app_commands.Choice(name="End", value="end")
+])
+async def calc_cmd(interaction: discord.Interaction, x: int, y: int, z: int, dimension: str):
+    await interaction.response.defer()
+
+    if dimension == "overworld":
+        nx, nz = round(x / 8), round(z / 8)
+        result = f"Nether: X={nx} Y={y} Z={nz}"
+    elif dimension == "nether":
+        ox, oz = x * 8, z * 8
+        result = f"Overworld: X={ox} Y={y} Z={oz}"
+    else:
+        result = "El bot no calcula conversions per dimensió End."
+
+    embed = Embed(title="🔢 CÀLCUL DE PORTAL", color=0xFF00FF)
+    embed.add_field(name="✏️ Entrada", value=f"```\n{x} {y} {z}\nDimensió: {dimension}\n```", inline=False)
+    embed.add_field(name="📤 Resultat", value=f"```\n{result}\n```", inline=False)
+
+    await interaction.followup.send(embed=embed)
+
+@bot.tree.command(name="route", description="Calcula la distància total d'una línia multi-parada")
+@app_commands.describe(
+    loc1="Ubicació 1",
+    loc2="Ubicació 2",
+    loc3="Ubicació 3 (opcional)",
+    loc4="Ubicació 4 (opcional)",
+    loc5="Ubicació 5 (opcional)"
+)
+@app_commands.autocomplete(
+    loc1=location_autocomplete,
+    loc2=location_autocomplete,
+    loc3=location_autocomplete,
+    loc4=location_autocomplete,
+    loc5=location_autocomplete
+)
+async def route_cmd(interaction: discord.Interaction, loc1: str, loc2: str, loc3: str = None, loc4: str = None, loc5: str = None):
+    import math
+
+    await interaction.response.defer()
+
+    coords_data = load_coords()
+    locations = [format_location_name(l) for l in [loc1, loc2, loc3, loc4, loc5] if l]
+
+    def get_coord(loc_name):
+        for d in ["overworld", "nether", "end"]:
+            if loc_name in coords_data["dimensions"][d]:
+                return coords_data["dimensions"][d][loc_name], d
+        return None, None
+
+    pairs = []
+    for i in range(len(locations) - 1):
+        coord1, dim1 = get_coord(locations[i])
+        coord2, dim2 = get_coord(locations[i + 1])
+        if not coord1 or not coord2:
+            missing = locations[i] if not coord1 else locations[i + 1]
+            await interaction.followup.send(f"❌ No s'ha trobat la ubicació: `{missing}`", ephemeral=True)
+            return
+        x1, z1 = coord1["x"], coord1["z"]
+        x2, z2 = coord2["x"], coord2["z"]
+        dx = abs(x2 - x1)
+        dz = abs(z2 - z1)
+        dist_2d = math.sqrt(dx ** 2 + dz ** 2)
+        tunnel_dist = dx + dz
+        pairs.append({
+            "from": (locations[i], coord1, dim1),
+            "to": (locations[i + 1], coord2, dim2),
+            "dist": dist_2d,
+            "tunnel": tunnel_dist,
+        })
+
+    total_diag = sum(p["dist"] for p in pairs)
+    total_tunnel = sum(p["tunnel"] for p in pairs)
+
+    embed = Embed(title="🛤️ RUTEA MULTI-STOP", color=0x00AAFF)
+
+    segments = "\n".join(
+        f"• {s['from'][0]} → {s['to'][0]}\n"
+        f"  Directa: {s['dist']:.1f}, Túnel: {s['tunnel']} blocks\n"
+        for s in pairs
+    )
+
+    summary_lines = f"• Segmentos totals: {len(pairs)}\n• Distància Directa total: {total_diag:.1f} blocs\n• Distància Túnel total: {total_tunnel} blocs"
+
+    embed.add_field(name="📍 Punt Inicial", value=f"{locations[0]}", inline=True)
+    embed.add_field(name="🎯 Punt Final", value=f"{locations[-1]}", inline=True)
+    embed.add_field(name="📊 Resum", value=f"```\n{summary_lines}\n```", inline=False)
+    embed.add_field(name="🛤️ Detall", value=f"```\n{segments}\n```", inline=False)
+
+    await interaction.followup.send(embed=embed)
+
 @bot.tree.command(name="distance", description="Calcula la distància i el recorregut de túnel entre dues ubicacions")
 @app_commands.describe(
     loc1="Primera ubicació",
